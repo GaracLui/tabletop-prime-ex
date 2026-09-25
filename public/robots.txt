@@ -1,0 +1,37 @@
+# TableTop Prime — robots.txt
+#
+# Allow all crawlers to access the public-facing pages (landing, privacy,
+# terms, public share pages). Authenticated routes (dashboard, account, etc.)
+# are SPA views and have no separate URLs to crawl, so they don't need to be
+# disallowed.
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: LinkedInBot
+Allow: /
+
+User-agent: WhatsApp
+Allow: /
+
+User-agent: Slackbot
+Allow: /
+
+User-agent: Discordbot
+Allow: /
+
+User-agent: *
+Allow: /
+
+# Sitemap — points at the production domain. Next.js serves /sitemap.xml
+# via the app/sitemap.ts route handler.
+Sitemap: https://tabletopprime.com/sitemap.xml

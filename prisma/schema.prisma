@@ -1,0 +1,295 @@
+// TableTop Prime — Prisma schema (v4 — PostgreSQL)
+//
+// v4 changes:
+//   - Provider switched from SQLite to PostgreSQL for production readiness.
+//   - SQLite is no longer supported; use Docker Postgres locally or a
+//     free cloud instance (Neon, Supabase, Vercel Postgres) for dev.
+//   - All column types map cleanly to Postgres (String -> text, Int -> int4,
+//     Boolean -> bool, DateTime -> timestamptz, enums -> native Postgres enums).
+//
+// Earlier history:
+//   v3: Event is the real source of truth (not localStorage); EventParticipant
+//       has a proper FK to Event; EventRegistry merged into Event; tiebreakers
+//       stored in scoringRulesJson.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                  String    @id @default(cuid())
+  // Links to the Supabase auth.users.id — set on first login.
+  supabaseAuthId      String    @unique
+  email               String    @unique
+  name                String?
+  primeTier           PrimeTier @default(FREE)
+  // Set when the user requests GDPR deletion.
+  deletionRequestedAt DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  organizedEvents  Event[]
+  players          Player[]
+  participations   EventParticipant[]
+  templates        EventTemplate[]
+}
+
+model EventParticipant {
+  id        String   @id @default(cuid())
+  userId    String
+  eventId   String
+  role      Role     @default(PLAYER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+  @@index([userId])
+  @@index([eventId])
+}
+
+enum Role {
+  ORGANIZER
+  JUDGE
+  PLAYER
+}
+
+enum PrimeTier {
+  FREE
+  TIER_1
+  TIER_2
+  TIER_3
+}
+
+enum EventStatus {
+  DRAFT
+  CHECK_IN
+  ACTIVE
+  FINISHED
+}
+
+enum ScoreState {
+  MISSING
+  PENDING_CONFIRM
+  LOCKED
+  DISPUTED
+}
+
+enum JudgeCallCategory {
+  SCORE
+  RULE
+  OTHER
+}
+
+enum JudgeCallStatus {
+  PENDING
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum RoundFormat {
+  ROUND_ROBIN
+  SWISS
+  SINGLE_ELIM
+  ADJACENT_SWISS
+}
+
+model Event {
+  id                 String      @id @default(cuid())
+  name               String
+  gameName           String
+  gameBggId          String?
+  gameMaxPlayers     Int?
+  minPlayersPerTable Int         @default(2)
+  maxPlayersPerTable Int         @default(4)
+  totalRounds        Int         @default(4)
+  status             EventStatus @default(DRAFT)
+  currentRound       Int         @default(0)
+  primeTier          PrimeTier   @default(FREE)
+  eventCode          String?     @unique
+  // ScoringRules serialized as JSON: { placementPoints, modifiers, tiebreakers }
+  scoringRulesJson   String
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  // Phase 1 event metadata — all nullable so existing events keep working.
+  //   • description: plain text shown on dashboard + share page (max ~2000 chars)
+  //   • scheduleJson: JSON array of { start, end? } ISO 8601 strings WITH offset.
+  //     Stored as TEXT (not JSONB) for Prisma simplicity; parsed on read.
+  //     Example: [{"start":"2026-08-15T14:00:00-03:00","end":"2026-08-15T20:00:00-03:00"}]
+  //     Single-day events: array with one entry. No schedule yet: null.
+  description        String?
+  scheduleJson       String?
+
+  // Phase 2 procedural banner — incremented by the organizer to "reroll" the
+  // procedurally generated SVG banner. The banner is a pure function of
+  // (eventId + bannerSeedOffset), so changing this value produces a different
+  // banner without storing any image data. Default 0 = use the event ID alone.
+  bannerSeedOffset   Int        @default(0)
+
+  organizerId String?
+  organizer   User?  @relation(fields: [organizerId], references: [id])
+
+  players       Player[]
+  pairings      RoundPairing[]
+  scores        TableScore[]
+  templates     EventTemplate[]
+  roundConfigs  RoundConfig[]
+  judgeCalls    JudgeCall[]
+  participants  EventParticipant[]
+
+  @@index([organizerId])
+}
+
+model Player {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  checkedIn Boolean  @default(false)
+  ready     Boolean  @default(false)
+  color     String   @default("bg-rose-500")
+
+  userId  String?
+  user    User?   @relation(fields: [userId], references: [id])
+
+  eventId String
+  event   Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  placements  PlacementScore[]
+  judgeCalls  JudgeCall[]
+
+  createdAt DateTime @default(now())
+
+  @@index([eventId])  // speeds up "list players for an event"
+  @@index([userId])   // speeds up "list events for a logged-in user"
+  @@unique([id, eventId])  // enables scoped where clause for IDOR prevention
+}
+
+model RoundPairing {
+  id                   String      @id @default(cuid())
+  round                Int
+  format               RoundFormat @default(ROUND_ROBIN)
+  tablesJson           String
+  droppedPlayerIdsJson String      @default("[]")
+  // Bonus round support — null/false = regular round, label = bonus round name
+  label                String?
+  isBonus              Boolean     @default(false)
+  // For bonus rounds: the regular round this bonus is associated with.
+  // null = regular round. 0 = "extra" (not tied to any specific round).
+  // 1+ = associated with that regular round number.
+  parentRound          Int?
+
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, round])
+  @@index([eventId])  // speeds up "list pairings for an event"
+}
+
+model RoundConfig {
+  id             String      @id @default(cuid())
+  round          Int
+  format         RoundFormat @default(ROUND_ROBIN)
+  minPerTable    Int         @default(2)
+  maxPerTable    Int         @default(4)
+  modifiersJson  String      @default("[]")
+  /// Seat rotation strategy: 'NONE' | 'CLOCKWISE' | 'BALANCED'. null = NONE.
+  /// Set by the organizer per-round to rotate first-player position for games
+  /// with seat-dependent advantage (Catan, Carcassonne, etc.).
+  seatRotation   String?
+
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, round])
+  @@index([eventId])  // speeds up "list round configs for an event"
+}
+
+model TableScore {
+  id               String     @id @default(cuid())
+  tableNumber      Int
+  round            Int
+  state            ScoreState @default(MISSING)
+  submittedBy      String?
+  confirmedBy      String?
+  note             String?
+  tablePointsTotal Int        @default(0)
+  lastEditedAt     DateTime?
+
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  placements PlacementScore[]
+
+  @@unique([eventId, round, tableNumber])
+  @@index([eventId])         // speeds up "list scores for an event"
+  @@index([eventId, round])  // speeds up "list scores for one round of an event"
+}
+
+model PlacementScore {
+  id         String @id @default(cuid())
+  playerId   String
+  placement  Int
+  gamePoints Int    @default(0)
+  basePoints Int
+  bonus      Int
+  total      Int
+
+  tableScoreId String
+  tableScore   TableScore @relation(fields: [tableScoreId], references: [id], onDelete: Cascade)
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([tableScoreId])  // speeds up "list placements for a table score"
+  @@index([playerId])      // speeds up "list placements for a player"
+}
+
+model EventTemplate {
+  id                 String   @id @default(cuid())
+  name               String
+  gameName           String
+  minPlayersPerTable Int
+  maxPlayersPerTable Int
+  totalRounds        Int
+  scoringRulesJson   String
+  createdAt          DateTime @default(now())
+
+  // Tracks who created this template — used by RLS policies on the
+  // public.EventTemplate table (see supabase/migrations/fix-security-lints.sql).
+  // Nullable so existing rows survive the migration; new inserts always set it.
+  createdById        String?
+
+  sourceEventId String?
+  sourceEvent   Event?  @relation(fields: [sourceEventId], references: [id])
+  createdBy     User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([createdById])
+}
+
+model JudgeCall {
+  id             String            @id @default(cuid())
+  tableNumber    Int
+  category       JudgeCallCategory
+  message        String?
+  status         JudgeCallStatus   @default(PENDING)
+  createdAt      DateTime          @default(now())
+  acknowledgedAt DateTime?
+  resolvedAt     DateTime?
+
+  eventId String?
+  event   Event?  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  submittedById String?
+  submittedBy   Player? @relation(fields: [submittedById], references: [id], onDelete: SetNull)
+
+  @@index([eventId])        // speeds up "list calls for an event"
+  @@index([eventId, status]) // speeds up "list active calls for an event"
+  @@unique([id, eventId])   // enables scoped where clause for IDOR prevention
+}

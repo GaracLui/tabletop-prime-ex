@@ -1,0 +1,28 @@
+# Local PostgreSQL for development.
+# Run `docker compose up -d` to start, `docker compose down` to stop.
+# The DB persists in a named volume (`tabletop-prime-db`).
+#
+# Connection string for .env:
+#   DATABASE_URL="postgresql://tabletop:tabletop@localhost:5432/tabletop?schema=public"
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: tabletop-prime-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tabletop
+      POSTGRES_PASSWORD: tabletop
+      POSTGRES_DB: tabletop
+    ports:
+      - "5432:5432"
+    volumes:
+      - tabletop-prime-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tabletop -d tabletop"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  tabletop-prime-db:

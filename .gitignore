@@ -1,0 +1,94 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+# ...but always track the template (S5)
+!.env.example
+
+# local database (legacy SQLite, kept around for old dev sessions)
+/db/*.db
+/db/*.db-journal
+
+# vercel
+.vercel
+
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+local-*
+
+# Prisma v7 generated client (regenerated on build)
+/src/generated/
+
+.claude
+.z-ai-config
+*.log
+dev.log
+dev.out.log
+test
+prompt
+
+server.log
+
+# Skills directory
+/skills/
+
+# ──────────────────────────────────────────────────────────────────────
+# Repo clutter — local-only files that should not be tracked in git.
+# These are useful locally (AI tool transcripts, uploaded files, dev
+# artifacts, worklog) but shouldn't clutter the repo history.
+# ──────────────────────────────────────────────────────────────────────
+
+# AI tool transcripts (read results, grep results, etc.)
+/tool-results/
+
+# User uploads (screenshots, CSVs for import, etc.)
+/upload/
+
+# Generated downloads (CSVs, PDFs, etc.)
+/download/
+
+# Dev scripts and PID files
+/.zscripts/
+
+# Worklog (large, local-only changelog)
+/worklog.md
+
+# Fix-log / setup / migration markdown files (local-only docs)
+/*-FIXES.md
+/*-SETUP.md
+/*-MIGRATION.md
+/ACCOUNT-DELETION.md
+/DEPLOY.md
+/I18N-TOOLING.md
