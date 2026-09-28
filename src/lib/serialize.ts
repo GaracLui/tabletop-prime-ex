@@ -92,6 +92,8 @@ export interface SerializableEvent {
   currentRound: number
   primeTier: string
   eventCode: string | null
+  /** S8: share visibility — PRIVATE (default) or PUBLIC. */
+  visibility: 'PRIVATE' | 'PUBLIC'
   scoringRulesJson: string
   description: string | null
   scheduleJson: string | null
@@ -152,6 +154,7 @@ export function serializeEvent(event: SerializableEvent): TournamentEvent {
     currentRound: event.currentRound,
     primeTier: event.primeTier as TournamentEvent['primeTier'],
     eventCode: event.eventCode,
+    visibility: event.visibility,
     description: event.description ?? null,
     schedule: parseSchedule(event.scheduleJson),
     bannerSeedOffset: event.bannerSeedOffset ?? 0,

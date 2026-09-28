@@ -9,6 +9,7 @@ import {
   useCreateEvent,
   useJoinEvent,
   usePublishEvent,
+  useUnpublishEvent,
   useTemplates,
 } from '@/hooks/use-event-data'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -32,7 +33,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Calendar, Trophy, Users, Plus, LogIn, Share2, FileText, AlignLeft, Clock, Filter } from 'lucide-react'
+import { Calendar, Trophy, Users, Plus, LogIn, Share2, FileText, AlignLeft, Clock, Filter, EyeOff } from 'lucide-react'
 import { parseSchedule } from '@/lib/serialize'
 import { scheduleCardLabel } from '@/lib/schedule'
 import { EventBannerThumbnail } from '@/components/event-banner'
@@ -473,7 +474,11 @@ function EventCard({ event, onClick }: { event: any; onClick: () => void }) {
   const { t } = useI18n()
   const { toast } = useToast()
   const publishEvent = usePublishEvent(event.id)
+  // S8: organizer-facing "unshare" — flips the event back to PRIVATE so
+  // /share/[code] + /api/public/[code] 404 (the code itself is kept).
+  const unpublishEvent = useUnpublishEvent(event.id)
   const queryClient = useQueryClient()
+  const isPublic = event.visibility === 'PUBLIC'
 
   // Compute schedule + description display values once per render.
   // `event.scheduleJson` is the raw JSON string from the API list response;
@@ -514,6 +519,17 @@ function EventCard({ event, onClick }: { event: any; onClick: () => void }) {
       toast({ title: t('myEvents.codeCopied'), description: result.eventCode })
     } catch {
       toast({ title: t('myEvents.shareFailed'), variant: 'destructive' })
+    }
+  }
+
+  // S8: stop sharing — the public page goes dark (404), the join code stays.
+  const handleUnpublish = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await unpublishEvent.mutateAsync()
+      toast({ title: t('myEvents.unpublished') })
+    } catch {
+      toast({ title: t('myEvents.unpublishFailed'), variant: 'destructive' })
     }
   }
 
@@ -575,20 +591,48 @@ function EventCard({ event, onClick }: { event: any; onClick: () => void }) {
           {formatEventStatus(event.status, t)}
         </div>
         {role === 'ORGANIZER' && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="w-full"
-            onClick={handleShare}
-            disabled={publishEvent.isPending}
-          >
-            <Share2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-            {t('dashboard.publishEvent')}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1"
+              onClick={handleShare}
+              disabled={publishEvent.isPending}
+            >
+              <Share2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+              {t('dashboard.publishEvent')}
+            </Button>
+            {isPublic && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="px-2.5"
+                onClick={handleUnpublish}
+                disabled={unpublishEvent.isPending}
+                aria-label={t('myEvents.unpublishEvent')}
+                title={t('myEvents.unpublishEvent')}
+              >
+                <EyeOff className="h-3.5 w-3.5" aria-hidden="true" />
+              </Button>
+            )}
+          </div>
         )}
         {event.eventCode && (
-          <p className="text-center font-mono text-xs text-muted-foreground">
-            {t('myEvents.codeLabel').replace('{code}', event.eventCode)}
+          <p className="flex items-center justify-center gap-2 text-center">
+            <span className="font-mono text-xs text-muted-foreground">
+              {t('myEvents.codeLabel').replace('{code}', event.eventCode)}
+            </span>
+            {role === 'ORGANIZER' && (
+              <Badge
+                className={
+                  isPublic
+                    ? 'bg-emerald-500 text-white'
+                    : 'bg-muted text-muted-foreground'
+                }
+              >
+                {isPublic ? t('myEvents.visibilityPublic') : t('myEvents.visibilityPrivate')}
+              </Badge>
+            )}
           </p>
         )}
       </CardContent>

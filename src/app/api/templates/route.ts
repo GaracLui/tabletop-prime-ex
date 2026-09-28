@@ -8,7 +8,7 @@
  * DELETE /api/templates/[id] → delete a template
  */
 import { NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/supabase/server'
+import { requireAuth, requireOrganizer } from '@/lib/supabase/server'
 import { db } from '@/lib/db'
 import { makeDefaultScoringRules } from '@/lib/pricing'
 
@@ -60,14 +60,16 @@ export async function POST(req: Request) {
 
     // Source from an existing event
     if (body.sourceEventId) {
-      // Verify user is organizer of the source event
-      const p = await db.eventParticipant.findUnique({
-        where: { userId_eventId: { userId, eventId: body.sourceEventId } },
-      })
-      if (p?.role !== 'ORGANIZER') {
-        return NextResponse.json({ error: 'Only the organizer can template this event' }, { status: 403 })
-      }
+      // C4: shared requireOrganizer() helper instead of a hand-rolled
+      // findUnique + role check (the copy-paste shape that produced S4).
+      // An unknown sourceEventId lands on the same 403 'Not authorized'
+      // as a non-organizer (no participant row either way).
+      const srcAuth = await requireOrganizer(body.sourceEventId)
+      if (!srcAuth.ok) return srcAuth.response
+
       const event = await db.event.findUnique({ where: { id: body.sourceEventId } })
+      // Unreachable via the API surface (a participant row implies its
+      // event exists); kept as the type guard for the create() below.
       if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
 
       const tpl = await db.eventTemplate.create({

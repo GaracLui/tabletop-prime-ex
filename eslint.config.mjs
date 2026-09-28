@@ -1,5 +1,6 @@
 import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
+import reactHooks from "eslint-plugin-react-hooks";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -7,6 +8,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
+  plugins: {
+    // Explicitly register so the v6+/v7 rules below resolve even when the
+    // installed eslint-config-next version doesn't propagate this plugin.
+    "react-hooks": reactHooks,
+  },
   rules: {
     // TypeScript rules
     "@typescript-eslint/no-explicit-any": "off",
@@ -51,7 +57,7 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-useless-escape": "off",
   },
 }, {
-  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills"]
+  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills", "src/generated/**"]
 }];
 
 export default eslintConfig;

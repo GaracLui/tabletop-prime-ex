@@ -14,11 +14,51 @@ import {
   collectPreviousPairings,
   normalizeLegacyFormat,
 } from '@/lib/engine/pairing-engine'
-import type { PairingDiagnostics } from '@/lib/engine/pairing-engine'
+import type {
+  PairingDiagnostics,
+  PairingOptions,
+  PairingStrategy,
+  SeatRotationStrategy,
+} from '@/lib/engine/pairing-engine'
 import {
   aggregateStandings,
 } from '@/lib/engine/scoring-engine'
 import type { Player, RoundPairing, RoundFormat, ScoringRules } from '@/lib/types'
+
+// ──────────────────────────────────────────────────────────────────────
+// Shared strategy invocation (C8.1 / C8.4)
+// ──────────────────────────────────────────────────────────────────────
+
+/**
+ * C8.4: RoundConfig.seatRotation is a plain TEXT column (see schema) while
+ * the engine expects the SeatRotationStrategy union. Route the stored value
+ * through this narrowing check instead of `as any` so a hand-edited row
+ * ('CLOCKWISE ') degrades to 'undefined' (engine default) rather than
+ * reaching the engine as a bogus strategy.
+ */
+function normalizeSeatRotation(
+  value: string | null | undefined
+): SeatRotationStrategy | undefined {
+  if (value === 'NONE' || value === 'CLOCKWISE' || value === 'BALANCED') return value
+  return undefined
+}
+
+/**
+ * C8.1: the generate and regenerate branches used to inline two ~20-line
+ * near-duplicates of this block. Run the strategy's
+ * generateWithDiagnostics when the strategy provides one (v6 engines —
+ * feasibility info for the UI), else fall back to plain generate with a
+ * null diagnostics payload.
+ */
+function runPairingStrategy(
+  strategy: PairingStrategy,
+  opts: PairingOptions
+): { pairing: RoundPairing; diagnostics: PairingDiagnostics | null } {
+  if (strategy.generateWithDiagnostics) {
+    return strategy.generateWithDiagnostics(opts)
+  }
+  return { pairing: strategy.generate(opts), diagnostics: null }
+}
 
 export async function GET(
   _req: Request,
@@ -177,28 +217,17 @@ export async function POST(
       }))
 
       const previous = collectPreviousPairings(prevPairings)
-      // v6: use generateWithDiagnostics to capture feasibility info
-      // (conflict count, iterations, time budget) for the UI.
-      const genResult = strategy.generateWithDiagnostics
-        ? strategy.generateWithDiagnostics({
-            players: active, round: nextRound,
-            minPerTable: rc?.minPerTable || eventRow.minPlayersPerTable,
-            maxPerTable: rc?.maxPerTable || eventRow.maxPlayersPerTable,
-            previousPairings: previous,
-            droppedPlayerIds: Array.from(previouslyDropped),
-            standings: standingsMap,
-            seatRotation: (rc?.seatRotation as any) ?? undefined,
-          })
-        : { pairing: strategy.generate({
-            players: active, round: nextRound,
-            minPerTable: rc?.minPerTable || eventRow.minPlayersPerTable,
-            maxPerTable: rc?.maxPerTable || eventRow.maxPlayersPerTable,
-            previousPairings: previous,
-            droppedPlayerIds: Array.from(previouslyDropped),
-            standings: standingsMap,
-            seatRotation: (rc?.seatRotation as any) ?? undefined,
-          }), diagnostics: null as PairingDiagnostics | null }
-      const { pairing, diagnostics } = genResult
+      // v6: prefer generateWithDiagnostics to capture feasibility info
+      // (conflict count, iterations, time budget) for the UI. (C8.1)
+      const { pairing, diagnostics } = runPairingStrategy(strategy, {
+        players: active, round: nextRound,
+        minPerTable: rc?.minPerTable || eventRow.minPlayersPerTable,
+        maxPerTable: rc?.maxPerTable || eventRow.maxPlayersPerTable,
+        previousPairings: previous,
+        droppedPlayerIds: Array.from(previouslyDropped),
+        standings: standingsMap,
+        seatRotation: normalizeSeatRotation(rc?.seatRotation),
+      })
 
       // Single transaction: create pairing + update event status atomically.
       await db.$transaction(async (tx) => {
@@ -269,27 +298,16 @@ export async function POST(
       )
 
       const previous = collectPreviousPairings(priorPairings)
-      // v6: use generateWithDiagnostics to capture feasibility info
-      const genResult = strategy.generateWithDiagnostics
-        ? strategy.generateWithDiagnostics({
-            players: active, round,
-            minPerTable: rc?.minPerTable || eventRow.minPlayersPerTable,
-            maxPerTable: rc?.maxPerTable || eventRow.maxPlayersPerTable,
-            previousPairings: previous,
-            droppedPlayerIds: Array.from(previouslyDropped),
-            standings: standingsMap,
-            seatRotation: (rc?.seatRotation as any) ?? undefined,
-          })
-        : { pairing: strategy.generate({
-            players: active, round,
-            minPerTable: rc?.minPerTable || eventRow.minPlayersPerTable,
-            maxPerTable: rc?.maxPerTable || eventRow.maxPlayersPerTable,
-            previousPairings: previous,
-            droppedPlayerIds: Array.from(previouslyDropped),
-            standings: standingsMap,
-            seatRotation: (rc?.seatRotation as any) ?? undefined,
-          }), diagnostics: null as PairingDiagnostics | null }
-      const { pairing, diagnostics } = genResult
+      // v6: prefer generateWithDiagnostics to capture feasibility info. (C8.1)
+      const { pairing, diagnostics } = runPairingStrategy(strategy, {
+        players: active, round,
+        minPerTable: rc?.minPerTable || eventRow.minPlayersPerTable,
+        maxPerTable: rc?.maxPerTable || eventRow.maxPlayersPerTable,
+        previousPairings: previous,
+        droppedPlayerIds: Array.from(previouslyDropped),
+        standings: standingsMap,
+        seatRotation: normalizeSeatRotation(rc?.seatRotation),
+      })
 
       await db.roundPairing.update({
         where: { id: existing.id },

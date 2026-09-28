@@ -202,6 +202,12 @@ export interface TournamentEvent {
   primeTier: PrimeTier
   /** Short human-readable code for joining (e.g. "SUMMER-7K3"). */
   eventCode?: string | null
+  /**
+   * S8: share-page visibility. PRIVATE (default) — /share/[code] and
+   * /api/public/[code] 404; PUBLIC — the event is publicly watchable.
+   * Optional so pre-S8 API responses keep typechecking.
+   */
+  visibility?: 'PRIVATE' | 'PUBLIC'
   /** Plain-text description shown on dashboard + share page. Null = not set. */
   description?: string | null
   /** Schedule entries (sorted by start time). Null/empty = no schedule. */

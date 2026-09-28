@@ -801,7 +801,12 @@
     "templateOption": "{name} — {game} ({min}–{max}, {rounds}r)",
     "templatesCloneHint": "Las plantillas clonan nombre del juego, tamaños de mesa, rondas totales y reglas de puntuación.",
     "templatesTitle": "Plantillas ({n})",
-    "useTemplate": "Usar plantilla (opcional)"
+    "unpublished": "Evento sin publicar: la página para compartir ahora es privada",
+    "unpublishEvent": "Dejar de compartir públicamente",
+    "unpublishFailed": "Error al dejar de compartir el evento",
+    "useTemplate": "Usar plantilla (opcional)",
+    "visibilityPrivate": "Privado",
+    "visibilityPublic": "Público"
   },
   "nav": {
     "account": "Cuenta",

@@ -52,7 +52,21 @@ export async function getAuthProfile() {
 }
 
 /**
- * Get or create the user's Prisma profile. Called on first login.
+ * Get or create the user's Prisma profile. Called on first login
+ * (POST /api/auth/sync-profile, invoked by the AuthProvider).
+ *
+ * S9.2: this used to be findUnique → create. Two concurrent first-login
+ * calls (e.g. the client double-firing sync-profile, or two tabs) both
+ * missed the findUnique, both ran create, and the second died on the
+ * supabaseAuthId unique constraint → a 500 on someone's very first login.
+ *
+ * The fix is the DB-atomic form: a fast-path read for the common case
+ * (every login after the first — stays read-only), then an UPSERT whose
+ * conflict branch is a no-op update that just returns the row the
+ * concurrent request created. `user.email!` is also gone: an auth user
+ * without an email (anonymous/phone sign-in — not supported by this app)
+ * now gets a clean 401 from the caller instead of a Prisma null-constraint
+ * 500.
  */
 export async function getOrCreateAuthProfile() {
   const supabase = await createServerClient()
@@ -60,15 +74,30 @@ export async function getOrCreateAuthProfile() {
   if (!user) return null
 
   const { db } = await import('@/lib/db')
+
+  // Fast path: profile already exists (99.9% of calls after first login).
   const existing = await db.user.findUnique({
     where: { supabaseAuthId: user.id },
   })
   if (existing) return existing
 
-  return db.user.create({
-    data: {
+  // First login — create the profile row. No email → nothing to key a
+  // User row on (email is NOT NULL + unique); fail auth cleanly.
+  if (!user.email) {
+    console.warn(`sync-profile: auth user ${user.id} has no email — refusing to create profile`)
+    return null
+  }
+
+  return db.user.upsert({
+    where: { supabaseAuthId: user.id },
+    // Deliberately empty: if we land here, a concurrent first-login
+    // request just created the row — it is already correct. Touching
+    // nothing avoids clobbering it (and avoids a unique violation if the
+    // user changed their Supabase email to one another profile owns).
+    update: {},
+    create: {
       supabaseAuthId: user.id,
-      email: user.email!,
+      email: user.email,
       name: user.user_metadata?.full_name || user.user_metadata?.name || null,
     },
   })

@@ -101,6 +101,16 @@ enum RoundFormat {
   ADJACENT_SWISS
 }
 
+/// S8: share-page visibility. Events are PRIVATE from creation — the code
+/// alone (join + share) no longer implies public reachability. PUBLIC means
+/// /api/public/[eventCode] and /share/[eventCode] serve the event; PRIVATE
+/// makes both 404. Flipped by the organizer via publish (POST) / unpublish
+/// (DELETE) on /api/events/[eventId]/publish.
+enum EventVisibility {
+  PRIVATE
+  PUBLIC
+}
+
 model Event {
   id                 String      @id @default(cuid())
   name               String
@@ -114,6 +124,9 @@ model Event {
   currentRound       Int         @default(0)
   primeTier          PrimeTier   @default(FREE)
   eventCode          String?     @unique
+  /// S8: share visibility (see EventVisibility enum). PRIVATE = share page
+  /// and public API return 404; join-by-code is unaffected.
+  visibility         EventVisibility @default(PRIVATE)
   // ScoringRules serialized as JSON: { placementPoints, modifiers, tiebreakers }
   scoringRulesJson   String
   createdAt          DateTime    @default(now())

@@ -39,9 +39,13 @@ export async function PATCH(
       return NextResponse.json({ error: 'Missing action or playerId' }, { status: 400 })
     }
 
+    // C8.2: this used to `include: { pairings: true, scores: true }` but
+    // `scores` was never read below — every call shipped every TableScore
+    // (with all its PlacementScore rows) over the wire for nothing. Only
+    // the pairings are needed to mutate the round.
     const event = await db.event.findUnique({
       where: { id: eventId },
-      include: { pairings: true, scores: true },
+      include: { pairings: true },
     })
     if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
 

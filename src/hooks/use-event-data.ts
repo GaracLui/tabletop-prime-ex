@@ -446,11 +446,37 @@ export function useSubmitScore(eventId: string) {
   })
 }
 
-/** Publish event (get event code). */
+/** Publish event (set visibility PUBLIC; returns the share/join code). */
 export function usePublishEvent(eventId: string) {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: () =>
       fetchJson(`/api/events/${eventId}/publish`, { method: 'POST' }),
+    onSuccess: () => {
+      // S8: publishing flips visibility — refresh the My Events feed so
+      // the card's Public badge reflects it immediately.
+      qc.invalidateQueries({ queryKey: ['events'] })
+      qc.invalidateQueries({ queryKey: ['event', eventId] })
+    },
+  })
+}
+
+/**
+ * S8: unpublish — flip the event back to PRIVATE so /share/[code] and
+ * /api/public/[code] 404. The code is kept, so a later re-publish
+ * (usePublishEvent) restores the same link.
+ */
+export function useUnpublishEvent(eventId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () =>
+      fetchJson(`/api/events/${eventId}/publish`, { method: 'DELETE' }),
+    onSuccess: () => {
+      // Refresh the My Events feed and the cached event so the card's
+      // Public badge flips back immediately.
+      qc.invalidateQueries({ queryKey: ['events'] })
+      qc.invalidateQueries({ queryKey: ['event', eventId] })
+    },
   })
 }
 

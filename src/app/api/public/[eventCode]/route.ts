@@ -5,6 +5,12 @@
  * Returns event name, status, standings, and current round pairings.
  * Used by the /share/[eventCode] public page.
  *
+ * S8: only serves events whose organizer has PUBLISHED them
+ * (visibility = PUBLIC). Private events 404 here — indistinguishable from
+ * a wrong code, so the endpoint neither leaks a draft roster/standings nor
+ * even reveals that the code exists. Join-by-code (/api/events/lookup) is
+ * a separate, authenticated surface and is unaffected.
+ *
  * Does NOT return: emails, user IDs, participant lists, or edit capabilities.
  * Only returns: player names, colors, placements, scores, table assignments,
  * description (organizer-provided plain text), and schedule (ISO 8601 strings).
@@ -21,8 +27,12 @@ export async function GET(
 ) {
   const { eventCode } = await params
 
+  // S8: visibility gate — PRIVATE events must not leak roster/standings.
+  // Filtering in the WHERE clause (not after the fetch) keeps the 404
+  // identical to "unknown code", so the endpoint never confirms that a
+  // private event's code is real.
   const event = await db.event.findUnique({
-    where: { eventCode },
+    where: { eventCode, visibility: 'PUBLIC' },
     select: {
       id: true,
       name: true,

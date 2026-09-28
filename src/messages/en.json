@@ -801,7 +801,12 @@
     "templateOption": "{name} — {game} ({min}–{max}, {rounds}r)",
     "templatesCloneHint": "Templates clone game name, table sizes, total rounds, and scoring rules.",
     "templatesTitle": "Templates ({n})",
-    "useTemplate": "Use template (optional)"
+    "unpublished": "Event unpublished — the share page is now private",
+    "unpublishEvent": "Stop sharing publicly",
+    "unpublishFailed": "Failed to unpublish event",
+    "useTemplate": "Use template (optional)",
+    "visibilityPrivate": "Private",
+    "visibilityPublic": "Public"
   },
   "nav": {
     "account": "Account",

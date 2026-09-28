@@ -18,8 +18,13 @@ interface SharePageProps {
 }
 
 async function getEventMeta(eventCode: string) {
+  // S8: filter on visibility in the query — a PRIVATE event must get the
+  // same generic "Event not found" metadata as an unknown code. Without
+  // this, the OG/Twitter tags in the HTML shell would leak the private
+  // event's name, game, round progress, and description even though the
+  // data API itself 404s.
   const event = await db.event.findUnique({
-    where: { eventCode },
+    where: { eventCode, visibility: 'PUBLIC' },
     select: {
       name: true,
       gameName: true,

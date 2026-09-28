@@ -41,6 +41,7 @@ export async function GET() {
           currentRound: true,
           totalRounds: true,
           eventCode: true,
+          visibility: true,
           description: true,
           scheduleJson: true,
           bannerSeedOffset: true,
@@ -62,6 +63,7 @@ export async function GET() {
       currentRound: p.event.currentRound,
       totalRounds: p.event.totalRounds,
       eventCode: p.event.eventCode,
+      visibility: p.event.visibility,
       description: p.event.description ?? null,
       scheduleJson: p.event.scheduleJson,
       bannerSeedOffset: p.event.bannerSeedOffset ?? 0,
@@ -142,6 +144,11 @@ export async function POST(req: Request) {
           totalRounds: totalRounds ?? template?.totalRounds ?? 4,
           primeTier: primeTier || 'FREE',
           scoringRulesJson: JSON.stringify(rules),
+          // The code is the JOIN key (see /api/events/lookup) and exists
+          // from creation. It is NOT a share grant: new events start
+          // visibility = PRIVATE (schema default), so /share/[code] +
+          // /api/public/[code] stay dark until the organizer publishes
+          // (S8). The public surface is toggled via the publish route.
           eventCode: generateEventCode(name),
           organizerId: userId,
           description: descNormalized,
